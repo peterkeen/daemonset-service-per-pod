@@ -133,6 +133,8 @@ shutdown = false
   end
 end
 
+STDERR.puts "STARTUP"
+
 config_path = File.expand_path '~/.kube/config'
 
 client = if File.exist?(config_path)
