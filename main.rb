@@ -1,4 +1,7 @@
 require 'k8s-ruby'
+require 'logger'
+
+LOG = Logger.new(STDERR)
 
 NODE_NAME_LABEL = "keen.land/nodeName"
 POD_NAME_LABEL = "keen.land/podName"
@@ -9,7 +12,7 @@ def needs_updated?(current_state, desired_state, debug: false)
   pp(current_state:, desired_state:) if debug
 
   if current_state.class != desired_state.class
-    puts "different classes" if debug
+    LOG.info "different classes" if debug
     return true
   end
 
@@ -19,17 +22,17 @@ def needs_updated?(current_state, desired_state, debug: false)
 
   case desired_state.class.to_s
   when "Hash"
-    puts "case Hash" if debug
+    LOG.info "case Hash" if debug
     desired_state.any? do |key, val|
       needs_updated?(current_state[key], val, debug: debug)
     end
   when "Array"
-    puts "case Array" if debug
+    LOG.info "case Array" if debug
     (0..(desired_state.length - 1)).any? do |i|
       needs_updated?(current_state[i], desired_state[i], debug: debug)
     end
   else
-    puts "case Fall through: #{desired_state.class}" if debug
+    LOG.info "case Fall through: #{desired_state.class}" if debug
     current_state != desired_state
   end
 end
@@ -64,7 +67,7 @@ end
 
 def refresh_labels_and_services_for_daemonset(client, daemonset)
   ds_name = daemonset.metadata.name
-  puts "Refreshing labels and serices for DaemonSet/#{ds_name}"
+  LOG.info "Refreshing labels and serices for DaemonSet/#{ds_name}"
 
   label_selector = daemonset.spec.selector.matchLabels.to_hash
   namespace = daemonset.metadata.namespace
@@ -107,10 +110,10 @@ def refresh_labels_and_services_for_daemonset(client, daemonset)
     next unless needs_updated?(existing_services[svc.metadata.name], svc, debug: false)
 
     if existing_services.key?(svc.metadata.name)
-      puts "updating service #{svc.metadata.name}"
+      LOG.info "updating service #{svc.metadata.name}"
       client.api('v1').resource('services').update_resource(svc)
     else
-      puts "creating service #{svc.metadata.name}"
+      LOG.info "creating service #{svc.metadata.name}"
       client.api('v1').resource('services').create_resource(svc)
     end
   end
@@ -133,17 +136,17 @@ shutdown = false
   end
 end
 
-STDERR.puts "STARTUP"
+LOG.info "STARTUP"
 
 config_path = File.expand_path '~/.kube/config'
 
 client = if File.exist?(config_path)
-  puts "Reading kube config from #{config_path}"
+  LOG.info "Reading kube config from #{config_path}"
   K8s::Client.config(
     K8s::Config.load_file(config_path)
   )
 else
-  puts "Assuming in-cluster kube config"
+  LOG.info "Assuming in-cluster kube config"
   K8s::Client.in_cluster_config
 end
 
@@ -158,3 +161,4 @@ while !shutdown
   end
   sleep 0.1
 end
+
