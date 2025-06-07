@@ -1,5 +1,10 @@
 require 'k8s-ruby'
 
+NODE_NAME_LABEL = "keen.land/nodeName"
+POD_NAME_LABEL = "keen.land/podName"
+SELECTOR_LABEL = "keen.land/ds-service-per-pod"
+PORT_ANNOTATION = "keen.land/ports"
+
 def needs_updated?(current_state, desired_state, debug: false)
   pp(current_state:, desired_state:) if debug
 
@@ -29,12 +34,32 @@ def needs_updated?(current_state, desired_state, debug: false)
   end
 end
 
-def labeler_namespace
-  ENV.fetch("LABELER_NAMESPACE")
+def find_daemonsets(client)
+  client.api("apps/v1").resource("daemonsets").list(labelSelector: {SELECTOR_LABEL => true})
 end
 
-def find_daemonsets(client)
-  client.api("apps/v1").resource("daemonsets", namespace: labeler_namespace).list(labelSelector: {"keen.land/ds-service-per-pod" => true})
+def parse_ports(raw_ports)
+  port_list = raw_ports.split(/,/)
+  port_list.map { |port| parse_port(port) }
+end
+
+def parse_port(raw_port)
+  name, port, target_port = raw_port.split(":")
+  target_port ||= port
+  protocol = "TCP"
+
+  if target_port.end_with?("/udp")
+    protocol = "UDP"
+    target_port = target_port.gsub("/udp", "")
+    port = port.gsub("/udp", "")
+  end
+
+  {
+    protocol: protocol,
+    port: port.to_i,
+    targetPort: target_port.to_i,
+    name: name,
+  }
 end
 
 def refresh_labels_and_services_for_daemonset(client, daemonset)
@@ -42,59 +67,45 @@ def refresh_labels_and_services_for_daemonset(client, daemonset)
   puts "Refreshing labels and serices for DaemonSet/#{ds_name}"
 
   label_selector = daemonset.spec.selector.matchLabels.to_hash
+  namespace = daemonset.metadata.namespace
 
-  existing_services = client.api("v1").resource("services", namespace: "iot-system").list(labelSelector: label_selector).map do |svc|
+  existing_services = client.api("v1").resource("services", namespace: namespace).list(labelSelector: label_selector).map do |svc|
     [svc.metadata.name, svc]
   end.to_h
 
-  client.api("v1").resource("pods", namespace: 'iot-system').list(labelSelector: label_selector).each do |pod|
+  client.api("v1").resource("pods", namespace: namespace).list(labelSelector: label_selector).each do |pod|
     new = K8s::Resource.new(pod.to_hash)
-    
-    new[:metadata][:labels]['keen.land/nodeName'] = pod.spec.nodeName
-    new[:metadata][:labels]['keen.land/podName'] = pod.metadata.name
-  
+
+    new[:metadata][:labels][NODE_NAME_LABEL] = pod.spec.nodeName
+    new[:metadata][:labels][POD_NAME_LABEL] = pod.metadata.name
+
     if needs_updated?(pod[:metadata][:labels], new[:metadata][:labels])
-      client.api("v1").resource("pods", namespace: labeler_namespace).update_resource(new)
+      client.api("v1").resource("pods", namespace: namespace).update_resource(new)
     end
 
-    ports = pod.spec.containers.flat_map(&:ports)
-  
+    ports = parse_ports(pod.metadata.annotations[PORT_ANNOTATION])
+
     svc = K8s::Resource.new({
       apiVersion: 'v1',
       kind: 'Service',
       metadata: {
         name: "#{ds_name}-#{pod.spec.nodeName}",
-        namespace: labeler_namespace,
+        namespace: namespace,
         labels: label_selector
       },
       spec: {
         type: 'ClusterIP',
         clusterIP: 'None',
         selector: {
-          'keen.land/podName' => pod.metadata.name,
-          'keen.land/nodeName' => pod.spec.nodeName,
+          POD_NAME_LABEL => pod.metadata.name,
+          NODE_NAME_LABEL => pod.spec.nodeName,
         },
-        ports: ports.map do |port|
-          if port.is_a?(Integer)
-            {
-              protocol: "TCP",
-              port: port,
-              targetPort: port
-            }
-          else
-            {
-              protocol: port.protocol || "TCP",
-              port: port.containerPort,
-              targetPort: port.containerPort,
-              name: port.name
-            }
-          end
-        end
+        ports: ports
       },
     })
-  
+
     next unless needs_updated?(existing_services[svc.metadata.name], svc, debug: false)
-  
+
     if existing_services.key?(svc.metadata.name)
       puts "updating service #{svc.metadata.name}"
       client.api('v1').resource('services').update_resource(svc)
@@ -133,7 +144,7 @@ else
   puts "Assuming in-cluster kube config"
   K8s::Client.in_cluster_config
 end
-  
+
 client.apis(prefetch_resources: true)
 
 last_run = -1
