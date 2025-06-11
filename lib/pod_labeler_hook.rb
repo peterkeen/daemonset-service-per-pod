@@ -31,6 +31,8 @@ class PodLabelerHook < Hook
   end
 
   def synchronize_pod(pod)
+    return if pod.nil?
+
     {
       operation: "MergePatch",
       apiVersion: pod[:apiVersion],

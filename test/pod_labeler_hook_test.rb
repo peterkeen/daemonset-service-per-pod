@@ -56,4 +56,43 @@ class PodLabelerHookTest < ::Minitest::Test
 
     assert_equal(expected_patch, PodLabelerHook.new.synchronize(context))
   end
+
+  def test_synchronize__works_with_created_event
+    context = [
+      {
+        type: "Created",
+        object: {
+          apiVersion: "v1",
+          kind: "Pod",
+          metadata: {
+            name: "test-pod",
+            namespace: "test-ns",
+          },
+          spec: {
+            nodeName: "some-node"
+          }
+        }
+      }
+    ]
+
+    expected_patch = [
+      {
+        operation: "MergePatch",
+        apiVersion: "v1",
+        kind: "Pod",
+        namespace: "test-ns",
+        name: "test-pod",
+        mergePatch: {
+          metadata: {
+            labels: {
+              "keen.land/podName" => "test-pod",
+              "keen.land/nodeName" => "some-node"
+            }
+          }
+        }
+      }
+    ]
+
+    assert_equal(expected_patch, PodLabelerHook.new.synchronize(context))    
+  end
 end

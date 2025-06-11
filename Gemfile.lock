@@ -48,6 +48,7 @@ GEM
       yajl-ruby (~> 1.4)
       yaml-safe_load_stream3
     logger (1.7.0)
+    minitest (5.25.5)
     msgpack (1.8.0)
     multi_json (1.15.0)
     ostruct (0.6.1)
@@ -65,6 +66,7 @@ PLATFORMS
 DEPENDENCIES
   bootsnap
   k8s-ruby
+  minitest
   rake
   zeitwerk
 

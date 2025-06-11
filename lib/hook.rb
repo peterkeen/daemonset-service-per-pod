@@ -15,13 +15,15 @@ class Hook
     if args[0] == "--config"
       puts config.to_json
     else
-      raw_context = File.read(ENV.fetch("BINDING_CONTEXT"))
+      raw_context = File.read(ENV.fetch("BINDING_CONTEXT_PATH"))
 
       context = JSON.parse(raw_context, symbolize_names: true)
       result = synchronize(context)
 
-      File.open(ENV.fetch("KUBERNETES_PATCH_PATH"), "w+") do |f|
-        f.write(result.to_json)
+      if !result.nil? && result.length > 0
+        File.open(ENV.fetch("KUBERNETES_PATCH_PATH"), "w+") do |f|
+          f.write(result.to_json)
+        end
       end
     end
   end

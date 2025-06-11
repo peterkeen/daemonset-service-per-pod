@@ -2,6 +2,9 @@
 # check=error=true
 
 ARG RUBY_VERSION=3.4.4
+
+FROM ghcr.io/flant/shell-operator:latest AS shell-operator
+
 FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
 
 # Rails app lives here
@@ -31,17 +34,21 @@ COPY . .
 
 # Precompile bootsnap code for faster boot times
 RUN bundle exec bootsnap precompile .
+RUN bundle exec rake build_hooks
 
 # Final stage for app image
 FROM base
+
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y ca-certificates jq && \
+    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+
+# Copy shell operator stuff
+COPY --from=shell-operator /shell-operator /
+COPY --from=shell-operator /bin/kubectl /bin
 
 # Copy built artifacts: gems, application
 COPY --from=build "${BUNDLE_PATH}" "${BUNDLE_PATH}"
 COPY --from=build /app /app
 
-# Run and own only the runtime files as a non-root user for security
-RUN groupadd --system --gid 1000 rails && \
-    useradd rails --uid 1000 --gid 1000 --create-home --shell /bin/bash
-USER 1000:1000
-
-CMD ["bundle", "exec", "ruby", "main.rb"]
+CMD ["/shell-operator", "start"]

@@ -1,0 +1,134 @@
+class PodServiceHookTest < ::Minitest::Test
+  def test_config
+    expected_config = {
+      configVersion: "v1",
+      onStartup: 1,
+      kubernetes: [
+        {
+          name: "monitor_pods",
+          group: "pod-per-service",
+          apiVersion: "v1",
+          kind: "Pod",
+          executeHookOnEvent: [ "Added", "Modified", "Deleted" ],
+          labelSelector: {
+            matchLabels: {
+              "keen.land/pod-per-service" => "true"
+            }
+          }
+        },
+        {
+          name: "monitor_services",
+          group: "pod-per-service",
+          apiVersion: "v1",
+          kind: "Service",
+          executeHookOnEvent: [ "Added", "Modified", "Deleted" ],
+          labelSelector: {
+            matchLabels: {
+              "keen.land/pod-per-service" => "true"
+            }            
+          },
+        },
+      ]
+    }
+
+    assert_equal(expected_config, PodServiceHook.new.config)
+  end
+
+  def test_synchronize__add_service
+    context = [
+      {
+        type: "Group",
+        snapshots: {
+          monitor_pods: [{
+          object: {
+             apiVersion: "v1",
+              kind: "Pod",
+              metadata: {
+                name: "test-pod-abc123",
+                namespace: "test-ns",
+                labels: {
+                  "keen.land/pod-per-service" => "true"
+                },
+                annotations: {
+                  :"keen.land/ports" => "web:8080"
+                }
+              },
+              spec: {
+                nodeName: "some-node"
+              }
+            }
+          }]
+        }
+      }
+    ]
+
+    expected_service = [
+      {
+        operation: "CreateOrUpdate",
+        object: {
+          apiVersion: "v1",
+          kind: "Service",
+          metadata: {
+            name: "test-pod-some-node",
+            namespace: "test-ns",
+            labels: {
+              "keen.land/pod-per-service" => "true"
+            }
+          },
+          spec: {
+            type: "ClusterIP",
+            clusterIP: "None",
+            selector: {
+              "keen.land/podName" => "test-pod-abc123"
+            },
+            ports: [
+              {
+                name: "web",
+                port: 8080,
+                targetPort: 8080,
+                protocol: "TCP",
+              }
+            ]
+          }
+        }
+      }
+    ]
+
+    assert_equal(expected_service, PodServiceHook.new.synchronize(context))
+  end
+
+  def test_synchronize__delete_service
+    context = [
+      {
+        type: "Group",
+        snapshots: {
+          monitor_services: [{
+          object: {
+             apiVersion: "v1",
+              kind: "Service",
+              metadata: {
+                name: "test-pod-some-node",
+                namespace: "test-ns",
+                labels: {
+                  "keen.land/pod-per-service" => "true"
+                },
+              },
+            }
+          }]
+        }
+      }
+    ]
+
+    expected_delete = [
+      {
+        operation: "DeleteInBackground",
+        apiVersion: "v1",
+        kind: "Service",
+        namespace: "test-ns",
+        name: "test-pod-some-node",
+      }
+    ]
+
+    assert_equal(expected_delete, PodServiceHook.new.synchronize(context))
+  end
+end
