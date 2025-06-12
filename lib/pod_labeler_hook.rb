@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class PodLabelerHook < Hook
+  LABEL_SELECTOR = {"keen.land/pod-per-service" => "true"}.freeze
+  
   def config
     {
       configVersion: "v1",
@@ -10,6 +12,9 @@ class PodLabelerHook < Hook
           name: "monitor-pods",
           apiVersion: "v1",
           kind: "Pod",
+          labelSelector: {
+            matchLabels: LABEL_SELECTOR
+          },
           executeHookOnEvent: [ "Added", "Modified" ]
         }
       ]
