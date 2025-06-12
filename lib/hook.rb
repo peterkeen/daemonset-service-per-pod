@@ -13,7 +13,7 @@ class Hook
 
   def run(args)
     if args[0] == "--config"
-      puts config.to_yaml
+      puts config.to_yaml(stringify_names: true)
     else
       raw_context = File.read(ENV.fetch("BINDING_CONTEXT_PATH"))
 
@@ -23,7 +23,7 @@ class Hook
       if !result.nil? && result.length > 0
         File.open(ENV.fetch("KUBERNETES_PATCH_PATH"), "w+") do |f|
           result.each do |r|
-            f.write(result.to_yaml)
+            f.write(result.to_yaml(stringify_names: true))
           end
         end
       end
