@@ -114,8 +114,8 @@ class PodServiceHook < Hook
 
     {
       protocol: protocol,
-      port: port.to_i,
-      targetPort: target_port.to_i,
+      port: port,
+      targetPort: target_port,
       name: name,
     }
   end
