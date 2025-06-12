@@ -23,7 +23,7 @@ class Hook
       if !result.nil? && result.length > 0
         File.open(ENV.fetch("KUBERNETES_PATCH_PATH"), "w+") do |f|
           result.each do |r|
-            f.write(result.to_yaml(stringify_names: true))
+            f.write(r.to_yaml(stringify_names: true))
           end
         end
       end
