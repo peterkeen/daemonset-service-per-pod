@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'json'
+require 'yaml'
 
 class Hook
   def config
@@ -13,7 +13,7 @@ class Hook
 
   def run(args)
     if args[0] == "--config"
-      puts config.to_json
+      puts config.to_yaml
     else
       raw_context = File.read(ENV.fetch("BINDING_CONTEXT_PATH"))
 
@@ -22,7 +22,9 @@ class Hook
 
       if !result.nil? && result.length > 0
         File.open(ENV.fetch("KUBERNETES_PATCH_PATH"), "w+") do |f|
-          f.write(result.to_json)
+          result.each do |r|
+            f.write(result.to_yaml)
+          end
         end
       end
     end
