@@ -8,6 +8,11 @@ class PodLabelerHookTest < ::Minitest::Test
           name: "monitor-pods",
           apiVersion: "v1",
           kind: "Pod",
+          labelSelector: {
+            matchLabels: {
+              "keen.land/service-per-pod" => "true"
+            }
+          },
           executeHookOnEvent: [ "Added", "Modified" ]
         }
       ]
@@ -27,6 +32,9 @@ class PodLabelerHookTest < ::Minitest::Test
             metadata: {
               name: "test-pod",
               namespace: "test-ns",
+              labels: {
+                "keen.land/service-per-pod" => "true"
+              }
             },
             spec: {
               nodeName: "some-node"
@@ -67,6 +75,9 @@ class PodLabelerHookTest < ::Minitest::Test
           metadata: {
             name: "test-pod",
             namespace: "test-ns",
+            labels: {
+              "keen.land/service-per-pod" => "true"
+            }
           },
           spec: {
             nodeName: "some-node"

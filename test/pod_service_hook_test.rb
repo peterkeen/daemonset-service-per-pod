@@ -12,7 +12,7 @@ class PodServiceHookTest < ::Minitest::Test
           executeHookOnEvent: [ "Added", "Modified", "Deleted" ],
           labelSelector: {
             matchLabels: {
-              "keen.land/pod-per-service" => "true"
+              "keen.land/service-per-pod" => "true"
             }
           }
         },
@@ -24,7 +24,7 @@ class PodServiceHookTest < ::Minitest::Test
           executeHookOnEvent: [ "Added", "Modified", "Deleted" ],
           labelSelector: {
             matchLabels: {
-              "keen.land/pod-per-service" => "true"
+              "keen.land/service-per-pod" => "true"
             }            
           },
         },
@@ -47,7 +47,7 @@ class PodServiceHookTest < ::Minitest::Test
                 name: "test-pod-abc123",
                 namespace: "test-ns",
                 labels: {
-                  "keen.land/pod-per-service" => "true"
+                  "keen.land/service-per-pod" => "true"
                 },
                 annotations: {
                   :"keen.land/ports" => "web:8080"
@@ -72,7 +72,7 @@ class PodServiceHookTest < ::Minitest::Test
             name: "test-pod-some-node",
             namespace: "test-ns",
             labels: {
-              "keen.land/pod-per-service" => "true"
+              "keen.land/service-per-pod" => "true"
             }
           },
           spec: {
@@ -110,7 +110,7 @@ class PodServiceHookTest < ::Minitest::Test
                 name: "test-pod-some-node",
                 namespace: "test-ns",
                 labels: {
-                  "keen.land/pod-per-service" => "true"
+                  "keen.land/service-per-pod" => "true"
                 },
               },
             }

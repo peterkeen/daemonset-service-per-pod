@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 class PodServiceHook < Hook
-  LABEL_SELECTOR = {"keen.land/pod-per-service" => "true"}.freeze
-  PORT_ANNOTATION = "keen.land/ports"    
+  LABEL_SELECTOR = {"keen.land/service-per-pod" => "true"}.freeze
+  PORT_ANNOTATION = "keen.land/ports"
 
   def config
     {

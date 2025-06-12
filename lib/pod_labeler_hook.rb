@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class PodLabelerHook < Hook
-  LABEL_SELECTOR = {"keen.land/pod-per-service" => "true"}.freeze
+  LABEL_SELECTOR = {"keen.land/service-per-pod" => "true"}.freeze
   
   def config
     {
