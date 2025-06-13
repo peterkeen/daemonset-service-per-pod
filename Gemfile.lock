@@ -63,6 +63,7 @@ PLATFORMS
 
 DEPENDENCIES
   bootsnap
+  concurrent-ruby
   k8s-ruby
 
 RUBY VERSION

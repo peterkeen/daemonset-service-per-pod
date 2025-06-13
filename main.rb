@@ -1,12 +1,47 @@
 require 'k8s-ruby'
 require 'logger'
+require 'concurrent-ruby'
 
 LOG = Logger.new(STDERR)
 
 NODE_NAME_LABEL = "keen.land/nodeName"
 POD_NAME_LABEL = "keen.land/podName"
-SELECTOR_LABEL = "keen.land/ds-service-per-pod"
+SELECTOR_LABEL = ENV.fetch("SELECTOR_LABEL", "keen.land/ds-service-per-pod")
+LABEL_SELECTOR = {SELECTOR_LABEL => "true"}
 PORT_ANNOTATION = "keen.land/ports"
+
+class Watcher
+  def initialize(client:, api:, resource:, label_selector:, &block)
+    @client = client
+    @api = api
+    @resource = resource
+    @label_selector = label_selector
+    @callback = block
+  end
+
+  def start
+    @thread = Thread.new do
+      while true
+        watch_resource
+      end
+    end
+    self
+  end
+
+  def stop
+    @thread.kill
+  end
+
+  def join
+    @thread.join
+  end
+
+  def watch_resource
+    @client.api(@api).resource(@resource).watch(labelSelector: @label_selector) do |event|
+      @callback.call(event)
+    end
+  end
+end
 
 def needs_updated?(current_state, desired_state, debug: false)
   pp(current_state:, desired_state:) if debug
@@ -38,7 +73,7 @@ def needs_updated?(current_state, desired_state, debug: false)
 end
 
 def find_daemonsets(client)
-  client.api("apps/v1").resource("daemonsets").list(labelSelector: {SELECTOR_LABEL => true})
+  client.api("apps/v1").resource("daemonsets").list(labelSelector: LABEL_SELECTOR)
 end
 
 def parse_ports(raw_ports)
@@ -79,10 +114,11 @@ def refresh_labels_and_services_for_daemonset(client, daemonset)
   client.api("v1").resource("pods", namespace: namespace).list(labelSelector: label_selector).each do |pod|
     new = K8s::Resource.new(pod.to_hash)
 
-    new[:metadata][:labels][NODE_NAME_LABEL] = pod.spec.nodeName
-    new[:metadata][:labels][POD_NAME_LABEL] = pod.metadata.name
+    new.metadata.labels[NODE_NAME_LABEL] = pod.spec.nodeName
+    new.metadata.labels[POD_NAME_LABEL] = pod.metadata.name
+    new.metadata.labels[SELECTOR_LABEL] = "true"
 
-    if needs_updated?(pod[:metadata][:labels], new[:metadata][:labels])
+    if needs_updated?(pod.metadata.labels, new.metadata.labels)
       client.api("v1").resource("pods", namespace: namespace).update_resource(new)
     end
 
@@ -94,7 +130,7 @@ def refresh_labels_and_services_for_daemonset(client, daemonset)
       metadata: {
         name: "#{ds_name}-#{pod.spec.nodeName}",
         namespace: namespace,
-        labels: label_selector,
+        labels: label_selector.merge(LABEL_SELECTOR),
         ownerReferences: [
           {
             apiVersion: daemonset.apiVersion,
@@ -146,27 +182,37 @@ end
 
 LOG.info "STARTUP"
 
-config_path = File.expand_path '~/.kube/config'
-
-client = if File.exist?(config_path)
-  LOG.info "Reading kube config from #{config_path}"
-  K8s::Client.config(
-    K8s::Config.load_file(config_path)
-  )
-else
-  LOG.info "Assuming in-cluster kube config"
-  K8s::Client.in_cluster_config
-end
-
+client = K8s::Client.autoconfig
 client.apis(prefetch_resources: true)
+
+label_selector = {SELECTOR_LABEL => true}
+
+work_queue = ::Concurrent::SingleThreadExecutor.new
 
 last_run = -1
 
+watchers = [
+  ["apps/v1", "daemonsets"],
+  ["v1", "pods"],
+  ["v1", "services"],
+].map do |api, resource|
+  Watcher.new(client:, api:, resource:, label_selector:) do |event|
+    work_queue.post do
+      refresh_all_labels_and_services(client)
+      last_run = now      
+    end
+  end.start
+end
+
 while !shutdown
-  if now - last_run >= 30
-    refresh_all_labels_and_services(client)
+  if now - last_run >= (5*60)
+    work_queue.post do
+      refresh_all_labels_and_services(client)
+    end
     last_run = now
   end
   sleep 0.1
 end
 
+watchers.each(&:stop)
+watchers.each(&:join)
