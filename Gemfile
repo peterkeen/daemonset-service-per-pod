@@ -7,3 +7,7 @@ gem 'bootsnap'
 gem 'rake'
 gem 'zeitwerk'
 gem 'minitest'
+
+group :test do
+  gem 'webmock'
+end

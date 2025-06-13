@@ -34,66 +34,66 @@ class PodServiceHook < Hook
   end
 
   def synchronize(context)
-    updates = []
     active_services = []
+    known_services = {}
 
     context.each do |event|
-      (event.dig(:snapshots, :monitor_pods) || []).each do |pod|
-        service = create_service_from_pod(pod[:object])
-        active_services = []
-        updates << service
-        active_services << [service.dig(:object, :metadata, :name), service.dig(:object, :metadata, :namespace)]
+      (event.dig(:snapshots, :monitor_services) || []).each do |service_wrapper|
+        svc = K8s::Resource.new(service_wrapper[:object])
+        known_services[[svc.metadata.namespace, svc.metadata.name]] = svc
       end
 
-      (event.dig(:snapshots, :monitor_services) || []).each do |service|
-        unless active_services.include?([service.dig(:object, :metadata, :name), service.dig(:object, :metadata, :namespace)])
-          updates << delete_service(service[:object])
+      (event.dig(:snapshots, :monitor_pods) || []).each do |pod_wrapper|
+        pod = K8s::Resource.new(pod_wrapper[:object])
+        svc = build_service_from_pod(pod)
+        svc_key = [svc.metadata.namespace, svc.metadata.name]
+        active_services << svc_key
+
+        if needs_updated?(known_services[svc_key], svc)
+          if known_services.key?(svc_key)
+            update_resource(svc)
+          else
+            create_resource(svc)
+          end
+        end
+      end
+
+      known_services.keys.each do |svc|
+        unless active_services.include?(svc)
+          delete_resource(known_services[svc])
         end
       end
     end
 
-    updates
+    nil
   end
 
-  def create_service_from_pod(pod)
-    podname = pod[:metadata][:name]
-    namespace = pod[:metadata][:namespace]
-    nodename = pod[:spec][:nodeName]
+  def build_service_from_pod(pod)
+    podname = pod.metadata.name
+    namespace = pod.metadata.namespace
+    nodename = pod.spec.nodeName
 
     ds_name = podname.split("-")[0..-2].join("-")
 
-    ports = parse_ports(pod.dig(:metadata, :annotations, PORT_ANNOTATION.to_sym) || "")
+    ports = parse_ports(pod.metadata.annotations[PORT_ANNOTATION] || "")
 
-    {
-      operation: "CreateOrUpdate",
-      object: {
-        apiVersion: 'v1',
-        kind: 'Service',
-        metadata: {
-          name: "#{ds_name}-#{nodename}",
-          namespace: namespace,
-          labels: LABEL_SELECTOR
+    K8s::Resource.new({
+      apiVersion: 'v1',
+      kind: 'Service',
+      metadata: {
+        name: "#{ds_name}-#{nodename}",
+        namespace: namespace,
+        labels: LABEL_SELECTOR,
+      },
+      spec: {
+        type: 'ClusterIP',
+        clusterIP: 'None',
+        selector: {
+          "keen.land/podName" => podname,
         },
-        spec: {
-          type: 'ClusterIP',
-          clusterIP: 'None',
-          selector: {
-            "keen.land/podName" => podname
-          },
-          ports: ports
-        }
-      }
-    }
-  end
-
-  def delete_service(service)
-    {
-      operation: "DeleteInBackground",
-      apiVersion: service[:apiVersion],
-      kind: service[:kind],
-      namespace: service[:metadata][:namespace],
-      name: service[:metadata][:name],
-    }
+        ports: ports
+      },
+    })
   end
 
   def parse_ports(raw_ports)
@@ -114,8 +114,8 @@ class PodServiceHook < Hook
 
     {
       protocol: protocol,
-      port: port,
-      targetPort: target_port,
+      port: port.to_i,
+      targetPort: target_port.to_i,
       name: name,
     }
   end

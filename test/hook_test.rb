@@ -7,6 +7,7 @@ class HookTest < ::Minitest::Test
   class TestHook < ::Hook
     def initialize(sync_output=nil)
       @sync_output = sync_output
+      super()
     end
 
     def config
@@ -119,14 +120,14 @@ class HookTest < ::Minitest::Test
     patch_file = Tempfile.new
     ENV['KUBERNETES_PATCH_PATH'] = patch_file.path
 
-    hook = TestHook.new([{hi: "there"}, {foo: "bar"}])
+    hook = TestHook.new([{hi: "there"}, {foo: 123}])
     hook.run([])
 
     expected = <<~HERE
     ---
     hi: there
     ---
-    foo: bar
+    foo: 123
     HERE
 
     patch_file.rewind

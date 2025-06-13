@@ -25,7 +25,7 @@ class PodServiceHookTest < ::Minitest::Test
           labelSelector: {
             matchLabels: {
               "keen.land/service-per-pod" => "true"
-            }            
+            }
           },
         },
       ]
@@ -62,39 +62,42 @@ class PodServiceHookTest < ::Minitest::Test
       }
     ]
 
-    expected_service = [
-      {
-        operation: "CreateOrUpdate",
-        object: {
-          apiVersion: "v1",
-          kind: "Service",
-          metadata: {
-            name: "test-pod-some-node",
-            namespace: "test-ns",
-            labels: {
-              "keen.land/service-per-pod" => "true"
-            }
-          },
-          spec: {
-            type: "ClusterIP",
-            clusterIP: "None",
-            selector: {
-              "keen.land/podName" => "test-pod-abc123"
-            },
-            ports: [
-              {
-                name: "web",
-                port: "8080",
-                targetPort: "8080",
-                protocol: "TCP",
-              }
-            ]
-          }
+    expected_service = {
+      apiVersion: "v1",
+      kind: "Service",
+      metadata: {
+        name: "test-pod-some-node",
+        namespace: "test-ns",
+        labels: {
+          "keen.land/service-per-pod": "true"
         }
+      },
+      spec: {
+        type: "ClusterIP",
+        clusterIP: "None",
+        selector: {
+          "keen.land/podName": "test-pod-abc123"
+        },
+        ports: [
+          {
+            name: "web",
+            port: 8080,
+            targetPort: 8080,
+            protocol: "TCP",
+          }
+        ]
       }
-    ]
+    }
 
-    assert_equal(expected_service, PodServiceHook.new.synchronize(context))
+    hook = PodServiceHook.new
+    mock_client = Minitest::Mock.new
+    mock_client.expect(:create_resource, nil) do |service|
+      assert_equal(expected_service, service.to_hash)
+    end
+
+    hook.stub(:client, mock_client) do
+      hook.synchronize(context)
+    end
   end
 
   def test_synchronize__delete_service
@@ -102,33 +105,45 @@ class PodServiceHookTest < ::Minitest::Test
       {
         type: "Group",
         snapshots: {
-          monitor_services: [{
-          object: {
-             apiVersion: "v1",
-              kind: "Service",
-              metadata: {
-                name: "test-pod-some-node",
-                namespace: "test-ns",
-                labels: {
-                  "keen.land/service-per-pod" => "true"
+          monitor_services: [
+            {
+              object: {
+                apiVersion: "v1",
+                kind: "Service",
+                metadata: {
+                  name: "test-pod-some-node",
+                  namespace: "test-ns",
+                  labels: {
+                    "keen.land/service-per-pod" => "true"
+                  },
                 },
-              },
+              }
             }
-          }]
+          ]
         }
       }
     ]
 
-    expected_delete = [
-      {
-        operation: "DeleteInBackground",
-        apiVersion: "v1",
-        kind: "Service",
+    expected_delete = {
+      apiVersion: "v1",
+      kind: "Service",
+      metadata: {
         namespace: "test-ns",
         name: "test-pod-some-node",
+        labels: {
+          "keen.land/service-per-pod": "true"
+        }
       }
-    ]
+    }
 
-    assert_equal(expected_delete, PodServiceHook.new.synchronize(context))
+    hook = PodServiceHook.new
+    mock_client = Minitest::Mock.new
+    mock_client.expect(:delete_resource, nil) do |service|
+      assert_equal(expected_delete, service.to_hash)
+    end
+
+    hook.stub(:client, mock_client) do
+      hook.synchronize(context)
+    end
   end
 end

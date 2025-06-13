@@ -29,4 +29,50 @@ class Hook
       end
     end
   end
+
+  def self.mock!
+    @@mock = true
+  end
+
+  def client
+    return @client if @client
+
+    @client = K8s::Client.autoconfig(mock: !!@@mock)
+  end
+
+  def create_resource(resource)
+    client.create_resource(resource)
+  end
+
+  def update_resource(resource)
+    client.update_resource(resource)
+  end
+
+  def delete_resource(resource)
+    client.delete_resource(resource)
+  end
+
+  def needs_updated?(current_state, desired_state)
+    if current_state.class != desired_state.class
+      return true
+    end
+
+    if desired_state.kind_of?(K8s::Resource)
+      return needs_updated?(current_state.to_hash, desired_state.to_hash)
+    end
+
+    case desired_state.class.to_s
+    when "Hash"
+      desired_state.any? do |key, val|
+        needs_updated?(current_state[key], val)
+      end
+    when "Array"
+      (0..(desired_state.length - 1)).any? do |i|
+        needs_updated?(current_state[i], desired_state[i])
+      end
+    else
+      current_state != desired_state
+    end
+  end
+
 end
