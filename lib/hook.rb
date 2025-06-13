@@ -30,14 +30,10 @@ class Hook
     end
   end
 
-  def self.mock!
-    @@mock = true
-  end
-
   def client
     return @client if @client
 
-    @client = K8s::Client.autoconfig(mock: !!@@mock)
+    @client = K8s::Client.autoconfig
   end
 
   def create_resource(resource)

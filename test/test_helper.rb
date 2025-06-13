@@ -35,4 +35,3 @@ ENV['KUBE_TOKEN'] = Base64.strict_encode64("token")
 ENV['KUBE_CA'] = Base64.strict_encode64(cert.to_pem)
 ENV['KUBE_SERVER'] = "https://example.com:8443"
 
-::Hook.mock!
