@@ -94,7 +94,15 @@ def refresh_labels_and_services_for_daemonset(client, daemonset)
       metadata: {
         name: "#{ds_name}-#{pod.spec.nodeName}",
         namespace: namespace,
-        labels: label_selector
+        labels: label_selector,
+        ownerReferences: [
+          {
+            apiVersion: daemonset.apiVersion,
+            kind: daemonset.kind,
+            name: daemonset.metadata.name,
+            uid: daemonset.metadata.uid,
+          }
+        ]
       },
       spec: {
         type: 'ClusterIP',
