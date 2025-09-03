@@ -141,6 +141,8 @@ def refresh_labels_and_services_for_daemonset(client, daemonset)
         ]
       },
       spec: {
+        type: 'ClusterIP',
+        clusterIP: 'None',
         selector: {
           POD_NAME_LABEL => pod.metadata.name,
           NODE_NAME_LABEL => pod.spec.nodeName,
